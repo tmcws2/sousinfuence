@@ -1,0 +1,66 @@
+name: Votes Sous Influence — Analyse quotidienne
+
+on:
+  schedule:
+    # Tous les jours à 10h00 heure de Paris (08h00 UTC)
+    - cron: "0 8 * * *"
+  workflow_dispatch:  # Déclenchement manuel depuis GitHub
+
+jobs:
+  analyser-et-poster:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Configuration Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installation des dépendances
+        run: pip install requests atproto
+
+      - name: Restauration du cache HATVP
+        uses: actions/cache@v4
+        with:
+          path: cache/hatvp_declarations.xml
+          key: hatvp-xml-${{ steps.date.outputs.date }}
+          restore-keys: |
+            hatvp-xml-
+
+      - name: Restauration du cache scrutins
+        uses: actions/cache@v4
+        with:
+          path: cache/scrutins_json
+          key: scrutins-${{ github.run_id }}
+          restore-keys: |
+            scrutins-
+
+      - name: Récupération de la date du jour
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Téléchargement des données HATVP
+        run: python3 hatvp_loader.py --build
+
+      - name: Téléchargement des scrutins AN
+        run: |
+          mkdir -p cache/scrutins_json/json
+          curl -L "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip" -o cache/Scrutins.json.zip
+          unzip -o cache/Scrutins.json.zip -d cache/scrutins_json
+
+      - name: Analyse et publication
+        env:
+          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BSKY_PASSWORD: ${{ secrets.BSKY_PASSWORD }}
+        run: python3 croisement.py --auto --post
+
+      - name: Sauvegarde des scrutins traités
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scrutins_traites.json cache/rapports/ || true
+          git diff --cached --quiet || git commit -m "chore: scrutins traités $(date +'%Y-%m-%d') [skip ci]"
+          git push || true

@@ -1,0 +1,7 @@
+cache/hatvp_declarations.xml
+cache/Scrutins.json.zip
+cache/scrutins_json/
+cache/hatvp_index.json
+cache/deputes_index.json
+__pycache__/
+*.pyc

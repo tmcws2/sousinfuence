@@ -1,0 +1,9 @@
+{
+  "energie_fossile": ["TotalEnergies", "Total", "Perenco", "Vermilion Energy", "Engie", "Vallourec", "Technip", "TechnipFMC", "Rubis"],
+  "nucleaire": ["EDF", "Orano", "Framatome", "ANDRA", "Assystem"],
+  "agro_chimie": ["Bayer", "BASF", "Syngenta", "Corteva", "Limagrain", "Yara", "Roullier"],
+  "agro_industrie": ["Lactalis", "Bigard", "Cooperl", "Avril", "LDC", "Terrena", "Tereos"],
+  "finance_carbonne": ["BNP Paribas", "Société Générale", "Crédit Agricole", "Natixis", "AXA", "Amundi"],
+  "transport_polluant": ["Stellantis", "Renault", "Air France", "Airbus", "Safran", "Vinci Autoroutes", "Eiffage"],
+  "industrie_lourde": ["ArcelorMittal", "Vallourec", "Saint-Gobain", "Lafarge", "Holcim", "Air Liquide", "Arkema"]
+}

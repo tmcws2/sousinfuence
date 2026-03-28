@@ -1,0 +1,91 @@
+{
+  "energie_fossile": [
+    "pétrole",
+    "gaz naturel",
+    "charbon",
+    "hydrocarbure",
+    "raffinage",
+    "pipeline",
+    "GNL",
+    "forage",
+    "TotalEnergies",
+    "Engie",
+    "exploration pétrolière"
+  ],
+  "nucleaire": [
+    "nucléaire",
+    "EPR",
+    "réacteur",
+    "centrale nucléaire",
+    "EDF",
+    "uranium",
+    "déchets radioactifs",
+    "démantèlement",
+    "Orano",
+    "relance nucléaire"
+  ],
+  "transition_energetique": [
+    "énergies renouvelables",
+    "éolien",
+    "solaire",
+    "photovoltaïque",
+    "transition énergétique",
+    "décarbonation",
+    "neutralité carbone",
+    "mix énergétique"
+  ],
+  "agriculture_industrie": [
+    "pesticide",
+    "glyphosate",
+    "néonicotinoïde",
+    "phytosanitaire",
+    "engrais",
+    "nitrate",
+    "OGM",
+    "agro-industrie",
+    "Bayer",
+    "BASF",
+    "Syngenta",
+    "agricole",
+    "alimentaire",
+    "agriculture",
+    "souveraineté alimentaire"
+  ],
+  "environnement": [
+    "biodiversité",
+    "déforestation",
+    "artificialisation",
+    "espèce protégée",
+    "zone humide",
+    "pêche",
+    "plastique",
+    "pollution",
+    "CO2",
+    "gaz à effet de serre",
+    "PFAS",
+    "eau potable"
+  ],
+  "transport": [
+    "automobile",
+    "véhicule thermique",
+    "ZFE",
+    "aviation",
+    "kérosène",
+    "autoroute"
+  ],
+  "finance_climat": [
+    "finance verte",
+    "taxonomie",
+    "taxe carbone",
+    "marché carbone",
+    "CSRD"
+  ],
+  "industrie_lourde": [
+    "aciérie",
+    "cimenterie",
+    "chimie",
+    "sidérurgie",
+    "aluminium",
+    "site Seveso"
+  ]
+}
