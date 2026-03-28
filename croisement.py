@@ -268,11 +268,12 @@ def croiser(numero_scrutin):
             if not signaux:
                 continue
             resultats.append({
-                "nom":      v["nom_complet"],
-                "groupe":   v["groupe"],
-                "position": position,
-                "signaux":  signaux,
-                "url_hatvp": fiche.get("url_hatvp", ""),
+                "nom":           v["nom_complet"],
+                "groupe":        v["groupe"],
+                "circonscription": v.get("circonscription", ""),
+                "position":      position,
+                "signaux":       signaux,
+                "url_hatvp":     fiche.get("url_hatvp", ""),
             })
 
     return {
@@ -327,6 +328,51 @@ def formater_rapport(analyse):
 
 # ── Génération des posts Bluesky ──────────────────────────────────────────────
 
+def resumer_texte_claude(titre, themes):
+    """Appelle GPT pour resumer le texte vote."""
+    import os
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return ""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        themes_str = ", ".join(themes)
+        prompt = (
+            "Tu es un assistant specialise en droit parlementaire francais. "
+            "Resume en 2 phrases maximum ce texte vote a l'Assemblee nationale, "
+            "ses enjeux et ses consequences concretes pour les citoyens. "
+            "Sois factuel et neutre. Ne commence pas par Ce texte.\n\n"
+            "Titre : " + titre + "\n"
+            "Themes : " + themes_str
+        )
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[openai] Erreur resume : {e}")
+        return ""
+
+HASHTAGS_GROUPES = {
+    "rassemblement national": "#RN",
+    "ensemble pour la république": "#EPR",
+    "la france insoumise": "#LFI",
+    "socialistes et apparentés": "#PS",
+    "droite républicaine": "#DR",
+    "les démocrates": "#Démocrates",
+    "horizons & indépendants": "#Horizons",
+    "horizons et indépendants": "#Horizons",
+    "libertés, indépendants, outre-mer et territoires": "#LIOT",
+    "union des droites pour la république": "#UDR",
+    "écologiste et social": "#EcoSocial",
+    "gauche démocrate et républicaine": "#GDR",
+    "non inscrit": "#NI",
+}
+
+
 def generer_posts(analyse):
     scrutin   = analyse["scrutin"]
     themes    = analyse["themes"]
@@ -337,56 +383,86 @@ def generer_posts(analyse):
 
     posts = []
 
-    # Post d'accroche
-    nb_signaux_forts = sum(
-        1 for r in resultats
-        if any(s["force"] == "fort" for s in r["signaux"])
-    )
-    resultat_str = "✅ Adopté" if scrutin["adopte"] else "❌ Rejeté"
-    titre_court  = scrutin["titre"][:140] + "…" if len(scrutin["titre"]) > 140 else scrutin["titre"]
+    # — POST 1 : accroche —
+    resultat_str = "\u2705 Adopt\u00e9" if scrutin["adopte"] else "\u274c Rejet\u00e9"
+    titre_court  = scrutin["titre"][:200] + "\u2026" if len(scrutin["titre"]) > 200 else scrutin["titre"]
+    lien_an = f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{scrutin['numero']}"
 
     accroche = (
-        f"🔍 Votes Sous Influence\n\n"
-        f"🗳️ Scrutin n°{scrutin['numero']} — {scrutin['date']}\n"
-        f"{titre_court}\n"
-        f"{resultat_str}\n\n"
-        f"{len(resultats)} député(s) avec des intérêts déclarés "
-        f"potentiellement liés à ce vote."
+        "\U0001f50d Votes Sous Influence\n\n"
+        f"\U0001f5f3\ufe0f Scrutin n\u00b0{scrutin['numero']} \u2014 {scrutin['date']}\n"
+        f"{resultat_str} | Vote en s\u00e9ance publique\n\n"
+        f"\U0001f4cb {titre_court}\n\n"
+        f"\U0001f517 {lien_an}\n\n"
+        f"\U0001f447 {len(resultats)} d\u00e9put\u00e9(s) avec des int\u00e9r\u00eats d\u00e9clar\u00e9s potentiellement li\u00e9s \u00e0 ce vote."
     )
     posts.append(accroche)
 
-    # Un post par député (max 8)
+    # — POST 2 : résumé GPT du texte —
+    resume = resumer_texte_claude(scrutin["titre"], themes)
+    if resume:
+        posts.append("\U0001f4d6 Le texte en bref :\n\n" + resume)
+
+    # — POST 3+ : un post par député (max 8) —
+    TYPE_LABELS = {
+        "participation_financiere": "actionnaire",
+        "participation_dirigeant": "",
+        "participation": "",
+        "interet": "",
+    }
+
     for r in resultats[:8]:
-        emoji_vote = {"pour": "👍", "contre": "👎", "abstention": "🫳"}.get(r["position"], "❓")
+        groupe_lower = r["groupe"].lower()
+        hashtag = HASHTAGS_GROUPES.get(groupe_lower, "")
+        emoji_vote = {"pour": "\U0001f44d", "contre": "\U0001f44e", "abstention": "\U0001faf3"}.get(r["position"], "\u2753")
+        position_label = {"pour": "POUR \u2705", "contre": "CONTRE \u274c", "abstention": "ABSTENTION \U0001faf3"}.get(r["position"], r["position"].upper())
+
+        circo = r.get("circonscription", "")
+        corps = f"{emoji_vote} {r['nom']}, D\u00e9put\u00e9\u00b7e {hashtag}\n"
+        if circo:
+            corps += f"\U0001f4cd {circo}\n"
+        corps += f"Vote : {position_label}\n\n"
+
         signaux_forts   = [s for s in r["signaux"] if s["force"] == "fort"]
         signaux_faibles = [s for s in r["signaux"] if s["force"] == "faible"]
 
-        corps = f"{emoji_vote} {r['nom']} ({r['groupe']})\nVote : {r['position'].upper()}\n\n"
-
         if signaux_forts:
-            corps += "⚠️ Signal fort :\n"
-            for s in signaux_forts[:2]:
-                corps += f"→ {s['organisme'][:60]}\n"
+            corps += "\u26a0\ufe0f Int\u00e9r\u00eats d\u00e9clar\u00e9s li\u00e9s \u00e0 ce vote :\n"
+            for s in signaux_forts[:4]:
+                org = s["organisme"][:50]
+                desc = s.get("description", "").strip()
+                type_bien = s.get("type", s.get("type_bien", ""))
+                label = TYPE_LABELS.get(type_bien, "")
+                if desc:
+                    corps += f"\u2192 {org} \u2014 {desc[:40]}\n"
+                elif label:
+                    corps += f"\u2192 {org} \u2014 {label}\n"
+                else:
+                    corps += f"\u2192 {org}\n"
 
         if signaux_faibles and len(corps) < 250:
-            corps += "~ Signal faible :\n"
             for s in signaux_faibles[:1]:
-                corps += f"→ {s['organisme'][:60]}\n"
+                org = s["organisme"][:50]
+                desc = s.get("description", "").strip()
+                corps += f"~ {org}"
+                if desc:
+                    corps += f" \u2014 {desc[:30]}"
+                corps += "\n"
 
         posts.append(corps.strip())
 
-    # Post de clôture avec disclaimer
+    # — POST final : disclaimer —
     cloture = (
-        f"📊 {len(resultats)} député(s) analysés sur ce scrutin.\n\n"
-        f"Ces données proviennent des déclarations d'intérêts "
-        f"publiées en open data par la HATVP.\n"
-        f"Conformément à l'art. LO.135-2 du code électoral, "
-        f"les déclarations de patrimoine ne sont pas divulguées.\n\n"
-        f"ℹ️ Ces co-occurrences sont des signaux, pas des conclusions."
+        f"\U0001f4ca {len(resultats)} d\u00e9put\u00e9(s) analys\u00e9s sur ce scrutin.\n\n"
+        "Source : d\u00e9clarations d'int\u00e9r\u00eats HATVP (open data).\n"
+        "\u2696\ufe0f Conform\u00e9ment \u00e0 l'art. LO.135-2 du code \u00e9lectoral, "
+        "les d\u00e9clarations de patrimoine ne sont pas divulgu\u00e9es.\n\n"
+        "\u2139\ufe0f Ces co-occurrences sont des signaux \u00e0 investiguer, pas des conclusions."
     )
     posts.append(cloture)
 
     return posts
+
 
 
 # ── Mode automatique ──────────────────────────────────────────────────────────

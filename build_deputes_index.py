@@ -55,10 +55,16 @@ def scraper_depute(ref):
     for civ in ["M. ", "Mme ", "M ", "Mme"]:
         nom_complet = nom_complet.replace(civ, "").strip()
     groupe = ""
+    circonscription = ""
     for part in parts:
-        if "groupe" in part.lower():
-            groupe = part.lower().replace("député du groupe", "").replace("députée du groupe", "").strip().rstrip(" .")
-    return {"nom_complet": nom_complet, "groupe": groupe}
+        p = part.strip()
+        if "groupe" in p.lower():
+            groupe = p.lower().replace("député du groupe", "").replace("députée du groupe", "").strip().rstrip(" .")
+        if "circonscription" in p.lower() or ("ème" in p and "député" in p.lower()):
+            circonscription = p.strip()
+        if "ère circonscription" in p.lower():
+            circonscription = p.strip()
+    return {"nom_complet": nom_complet, "groupe": groupe, "circonscription": circonscription}
 
 
 def build_index():
