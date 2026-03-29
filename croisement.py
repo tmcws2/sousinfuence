@@ -56,7 +56,6 @@ def save_traites(liste):
 # ── Détection des nouveaux scrutins ──────────────────────────────────────────
 
 def detecter_nouveaux_scrutins():
-    """Retourne les numéros de scrutins pas encore traités."""
     traites = set(load_traites())
     tous = set()
     for path in CACHE_DIR.glob("VTANR5L17V*.json"):
@@ -70,10 +69,6 @@ def detecter_nouveaux_scrutins():
 # ── Filtrage par mots-clés ────────────────────────────────────────────────────
 
 def scrutin_est_pertinent(scrutin, mots_cles):
-    """
-    Retourne la liste des thèmes matchés si le titre du scrutin
-    contient au moins un mot-clé, sinon liste vide.
-    """
     titre_norm = normalize(scrutin["titre"])
     themes_matches = []
     for theme, mots in mots_cles.items():
@@ -87,7 +82,6 @@ def scrutin_est_pertinent(scrutin, mots_cles):
 # ── Matching flou député ↔ HATVP ──────────────────────────────────────────────
 
 def match_hatvp(nom_normalise, hatvp_index):
-    """Retourne la fiche HATVP la plus proche ou None."""
     best_score = 0.0
     best_entry = None
     for cle, data in hatvp_index.items():
@@ -102,14 +96,12 @@ def match_hatvp(nom_normalise, hatvp_index):
 
 # ── Scoring des intérêts ──────────────────────────────────────────────────────
 
-# Rôles qui indiquent un vrai lien (même passé)
 ROLES_SIGNIFICATIFS = [
     "administrateur", "dirigeant", "president", "directeur",
     "gerant", "associe", "membre du conseil", "membre ca",
     "membre du ca", "vice-president", "tresorier",
 ]
 
-# Rôles à exclure car trop ténus
 ROLES_A_EXCLURE = [
     "salarie", "employe", "stagiaire", "technicien",
     "ouvrier", "infirmier", "teleconseiller", "delegue medical",
@@ -117,37 +109,24 @@ ROLES_A_EXCLURE = [
     "presentateur", "ingenieur", "consultant",
 ]
 
-# Organismes trop communs pour être significatifs seuls
 ORGANISMES_EXCLUS_SEUL_SOCIO = [
     "credit agricole", "caisse locale", "caisse regionale",
 ]
 
 
 def _role_est_significatif(description):
-    """
-    Retourne True si le rôle décrit est un mandat dirigeant
-    (même passé), False si c est un simple emploi salarié.
-    """
     desc = normalize(description or "")
-    # Exclure les rôles salariés
     if any(r in desc for r in ROLES_A_EXCLURE):
         return False
-    # Garder explicitement les rôles dirigeants (même passés)
     if any(r in desc for r in ROLES_SIGNIFICATIFS):
         return True
-    # Par défaut : garder (on préfère les faux positifs aux faux négatifs)
     return True
 
 
 def _organisme_est_banal(organisme, description):
-    """
-    Retourne True si l organisme est trop commun pour être signalé
-    sans rôle dirigeant (ex: simple sociétaire Crédit Agricole).
-    """
     org = normalize(organisme or "")
     desc = normalize(description or "")
     if any(exclu in org for exclu in ORGANISMES_EXCLUS_SEUL_SOCIO):
-        # Garder quand même si rôle d administrateur
         if any(r in desc or r in org for r in ["administrateur", "president", "directeur", "conseil d"]):
             return False
         return True
@@ -155,23 +134,13 @@ def _organisme_est_banal(organisme, description):
 
 
 def scorer_interets(fiche_hatvp, entreprises, themes_scrutin):
-    """
-    Retourne une liste de signaux trouvés.
-    Règles :
-    - Garde : participation en cours (administrateur, dirigeant)
-    - Garde : participation passée si rôle dirigeant (conflit de gratitude)
-    - Retire : ancien salarié, stagiaire, employé
-    - Retire : simple sociétaire Crédit Agricole sans rôle dirigeant
-    """
     signaux = []
     tous_organismes = set()
 
-    # Collecte tous les organismes surveillés (tous thèmes confondus)
     for theme, orgs in entreprises.items():
         for org in orgs:
             tous_organismes.add(normalize(org))
 
-    # Vérifie les participations
     for p in fiche_hatvp.get("patrimoine", []):
         org = normalize(p.get("organisme", ""))
         desc = p.get("libelle", "") or ""
@@ -183,7 +152,6 @@ def scorer_interets(fiche_hatvp, entreprises, themes_scrutin):
             continue
         for org_surveille in tous_organismes:
             if org_surveille in org or org in org_surveille:
-                # Signal fort si en cours OU si rôle dirigeant passé
                 est_dirigeant = any(r in normalize(desc) for r in ROLES_SIGNIFICATIFS)
                 force = "fort" if p.get("en_cours") or est_dirigeant else "faible"
                 signaux.append({
@@ -194,7 +162,6 @@ def scorer_interets(fiche_hatvp, entreprises, themes_scrutin):
                 })
                 break
 
-    # Vérifie les intérêts déclarés
     for i in fiche_hatvp.get("interets", []):
         org_raw = i.get("organisme", "") or i.get("description", "")
         desc    = i.get("description", "") or i.get("categorie", "") or ""
@@ -217,7 +184,6 @@ def scorer_interets(fiche_hatvp, entreprises, themes_scrutin):
                 })
                 break
 
-    # Dédoublonnage par organisme
     vus = set()
     uniques = []
     for s in signaux:
@@ -232,9 +198,6 @@ def scorer_interets(fiche_hatvp, entreprises, themes_scrutin):
 # ── Croisement principal ──────────────────────────────────────────────────────
 
 def croiser(numero_scrutin):
-    """
-    Analyse un scrutin et retourne un rapport structuré.
-    """
     mots_cles   = load_mots_cles()
     entreprises = load_entreprises()
     hatvp       = load_hatvp()
@@ -244,15 +207,12 @@ def croiser(numero_scrutin):
     if not scrutin:
         return None
 
-    # Filtre par mots-clés
     themes = scrutin_est_pertinent(scrutin, mots_cles)
     if not themes:
         return None
 
-    # Résolution des noms
     scrutin = resoudre_noms(scrutin, deputes)
 
-    # Croisement
     resultats = []
     for position, votants in scrutin["votants"].items():
         if position == "nonVotant":
@@ -268,17 +228,17 @@ def croiser(numero_scrutin):
             if not signaux:
                 continue
             resultats.append({
-                "nom":           v["nom_complet"],
-                "groupe":        v["groupe"],
+                "nom":            v["nom_complet"],
+                "groupe":         v["groupe"],
                 "circonscription": v.get("circonscription", ""),
-                "position":      position,
-                "signaux":       signaux,
-                "url_hatvp":     fiche.get("url_hatvp", ""),
+                "position":       position,
+                "signaux":        signaux,
+                "url_hatvp":      fiche.get("url_hatvp", ""),
             })
 
     return {
-        "scrutin":  scrutin,
-        "themes":   themes,
+        "scrutin":   scrutin,
+        "themes":    themes,
         "resultats": resultats,
     }
 
@@ -302,7 +262,6 @@ def formater_rapport(analyse):
         lignes.append("\nAucun signal détecté.")
         return "\n".join(lignes)
 
-    # Trier : signaux forts en premier, puis par position
     resultats_tries = sorted(
         resultats,
         key=lambda r: (
@@ -326,10 +285,9 @@ def formater_rapport(analyse):
     return "\n".join(lignes)
 
 
-# ── Génération des posts Bluesky ──────────────────────────────────────────────
+# ── Résumé GPT ────────────────────────────────────────────────────────────────
 
-def resumer_texte_claude(titre, themes):
-    """Appelle GPT pour resumer le texte vote."""
+def resumer_texte_gpt(titre, themes):
     import os
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
@@ -340,21 +298,25 @@ def resumer_texte_claude(titre, themes):
         themes_str = ", ".join(themes)
         prompt = (
             "Tu es un assistant specialise en droit parlementaire francais. "
-            "Resume en 2 phrases maximum ce texte vote a l'Assemblee nationale, "
+            "Resume en 2 phrases ce texte vote a l'Assemblee nationale : "
             "ses enjeux et ses consequences concretes pour les citoyens. "
-            "Sois factuel et neutre. Ne commence pas par Ce texte.\n\n"
+            "Sois factuel, neutre, et termine toujours tes phrases. "
+            "Ne commence pas par Ce texte.\n\n"
             "Titre : " + titre + "\n"
             "Themes : " + themes_str
         )
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            max_tokens=200,
+            max_tokens=150,
             messages=[{"role": "user", "content": prompt}]
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        print(f"[openai] Erreur resume : {e}")
+        print(f"[openai] Erreur : {e}")
         return ""
+
+
+# ── Génération des posts Bluesky ──────────────────────────────────────────────
 
 HASHTAGS_GROUPES = {
     "rassemblement national": "#RN",
@@ -372,6 +334,39 @@ HASHTAGS_GROUPES = {
     "non inscrit": "#NI",
 }
 
+TYPE_LABELS = {
+    "participation_financiere": "actionnaire",
+    "participation_dirigeant": "",
+    "participation": "",
+    "interet": "",
+}
+
+
+def compter_graphemes(texte):
+    """Compte les graphèmes Bluesky (approximation : 1 char = 1 graphème)."""
+    return len(texte)
+
+
+def tronquer_post(texte, max_g=295):
+    """Tronque un post à max_g graphèmes en finissant proprement la phrase."""
+    if compter_graphemes(texte) <= max_g:
+        return texte
+    coupe = texte[:max_g]
+    # Tente de finir sur une fin de phrase
+    for sep in [".", "!", "?"]:
+        idx = coupe.rfind(sep)
+        if idx > int(max_g * 0.5):
+            return coupe[:idx + 1]
+    # Sinon coupe sur un saut de ligne
+    idx = coupe.rfind("\n")
+    if idx > int(max_g * 0.5):
+        return coupe[:idx]
+    # Sinon coupe sur un espace
+    idx = coupe.rfind(" ")
+    if idx > 0:
+        return coupe[:idx] + "…"
+    return coupe + "…"
+
 
 def generer_posts(analyse):
     scrutin   = analyse["scrutin"]
@@ -383,92 +378,89 @@ def generer_posts(analyse):
 
     posts = []
 
-    # — POST 1 : accroche —
-    resultat_str = "\u2705 Adopt\u00e9" if scrutin["adopte"] else "\u274c Rejet\u00e9"
-    titre_court  = scrutin["titre"][:200] + "\u2026" if len(scrutin["titre"]) > 200 else scrutin["titre"]
+    # POST 1 : accroche (titre court + lien)
+    resultat_str = "✅ Adopté" if scrutin["adopte"] else "❌ Rejeté"
+    # Titre court : max 120 chars pour laisser de la place au reste
+    titre = scrutin["titre"]
+    titre_court = titre[:117] + "…" if len(titre) > 120 else titre
     lien_an = f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{scrutin['numero']}"
 
     accroche = (
-        "\U0001f50d Votes Sous Influence\n\n"
-        f"\U0001f5f3\ufe0f Scrutin n\u00b0{scrutin['numero']} \u2014 {scrutin['date']}\n"
-        f"{resultat_str} | Vote en s\u00e9ance publique\n\n"
-        f"\U0001f4cb {titre_court}\n\n"
-        f"\U0001f517 {lien_an}\n\n"
-        f"\U0001f447 {len(resultats)} d\u00e9put\u00e9(s) avec des int\u00e9r\u00eats d\u00e9clar\u00e9s potentiellement li\u00e9s \u00e0 ce vote."
+        f"🔍 Votes Sous Influence\n\n"
+        f"🗳️ Scrutin n°{scrutin['numero']} — {scrutin['date']}\n"
+        f"{resultat_str} | Vote en séance publique\n\n"
+        f"📋 {titre_court}\n\n"
+        f"🔗 {lien_an}\n\n"
+        f"👇 {len(resultats)} député(s) avec des intérêts déclarés potentiellement liés à ce vote."
     )
     posts.append(accroche)
 
-    # — POST 2 : résumé GPT du texte —
-    resume = resumer_texte_claude(scrutin["titre"], themes)
+    # POST 2 : résumé GPT
+    resume = resumer_texte_gpt(scrutin["titre"], themes)
     if resume:
-        posts.append("\U0001f4d6 Le texte en bref :\n\n" + resume)
+        post_resume = f"📖 Le texte en bref :\n\n{resume}"
+        posts.append(post_resume)
 
-    # — POST 3+ : un post par député (max 8) —
-    TYPE_LABELS = {
-        "participation_financiere": "actionnaire",
-        "participation_dirigeant": "",
-        "participation": "",
-        "interet": "",
-    }
-
+    # POST 3+ : un post par député (max 8)
     for r in resultats[:8]:
         groupe_lower = r["groupe"].lower()
         hashtag = HASHTAGS_GROUPES.get(groupe_lower, "")
-        emoji_vote = {"pour": "\U0001f44d", "contre": "\U0001f44e", "abstention": "\U0001faf3"}.get(r["position"], "\u2753")
-        position_label = {"pour": "POUR \u2705", "contre": "CONTRE \u274c", "abstention": "ABSTENTION \U0001faf3"}.get(r["position"], r["position"].upper())
+        emoji_vote = {"pour": "👍", "contre": "👎", "abstention": "🫳"}.get(r["position"], "❓")
+        position_label = {
+            "pour": "POUR ✅",
+            "contre": "CONTRE ❌",
+            "abstention": "ABSTENTION 🫳"
+        }.get(r["position"], r["position"].upper())
 
         circo = r.get("circonscription", "")
-        corps = f"{emoji_vote} {r['nom']}, D\u00e9put\u00e9\u00b7e {hashtag}\n"
+        corps = f"{emoji_vote} {r['nom']}, Député·e {hashtag}\n"
         if circo:
-            corps += f"\U0001f4cd {circo}\n"
+            corps += f"📍 {circo}\n"
         corps += f"Vote : {position_label}\n\n"
 
         signaux_forts   = [s for s in r["signaux"] if s["force"] == "fort"]
         signaux_faibles = [s for s in r["signaux"] if s["force"] == "faible"]
 
         if signaux_forts:
-            corps += "\u26a0\ufe0f Int\u00e9r\u00eats d\u00e9clar\u00e9s li\u00e9s \u00e0 ce vote :\n"
+            corps += "⚠️ Intérêts déclarés liés à ce vote :\n"
             for s in signaux_forts[:4]:
                 org = s["organisme"][:50]
                 desc = s.get("description", "").strip()
                 type_bien = s.get("type", s.get("type_bien", ""))
                 label = TYPE_LABELS.get(type_bien, "")
                 if desc:
-                    corps += f"\u2192 {org} \u2014 {desc[:40]}\n"
+                    corps += f"→ {org} — {desc[:40]}\n"
                 elif label:
-                    corps += f"\u2192 {org} \u2014 {label}\n"
+                    corps += f"→ {org} — {label}\n"
                 else:
-                    corps += f"\u2192 {org}\n"
+                    corps += f"→ {org}\n"
 
-        if signaux_faibles and len(corps) < 250:
+        if signaux_faibles and compter_graphemes(corps) < 240:
             for s in signaux_faibles[:1]:
                 org = s["organisme"][:50]
                 desc = s.get("description", "").strip()
                 corps += f"~ {org}"
                 if desc:
-                    corps += f" \u2014 {desc[:30]}"
+                    corps += f" — {desc[:30]}"
                 corps += "\n"
 
         posts.append(corps.strip())
 
-    # — POST final : disclaimer —
+    # POST final : disclaimer
     cloture = (
-        f"\U0001f4ca {len(resultats)} d\u00e9put\u00e9(s) analys\u00e9s sur ce scrutin.\n\n"
-        "Source : d\u00e9clarations d'int\u00e9r\u00eats HATVP (open data).\n"
-        "\u2696\ufe0f Conform\u00e9ment \u00e0 l'art. LO.135-2 du code \u00e9lectoral, "
-        "les d\u00e9clarations de patrimoine ne sont pas divulgu\u00e9es.\n\n"
-        "\u2139\ufe0f Ces co-occurrences sont des signaux \u00e0 investiguer, pas des conclusions."
+        f"📊 {len(resultats)} député(s) analysés sur ce scrutin.\n\n"
+        "Source : déclarations d'intérêts HATVP (open data).\n"
+        "⚖️ Art. LO.135-2 du code électoral : les déclarations de patrimoine ne sont pas divulguées.\n\n"
+        "ℹ️ Ces co-occurrences sont des signaux à investiguer, pas des conclusions."
     )
     posts.append(cloture)
 
     return posts
 
 
-
 # ── Mode automatique ──────────────────────────────────────────────────────────
 
 def mode_auto(poster=False):
-    """Détecte et analyse tous les nouveaux scrutins."""
     nouveaux = detecter_nouveaux_scrutins()
     print(f"[croisement] {len(nouveaux)} nouveaux scrutins à analyser.")
 
@@ -479,37 +471,34 @@ def mode_auto(poster=False):
         print(f"[croisement] Analyse scrutin {numero}...")
         analyse = croiser(numero)
 
-        # Marquer comme traité même si pas de signal
         traites.append(numero)
         save_traites(traites)
 
         if not analyse:
             continue
-
         if not analyse["resultats"]:
             continue
 
         analyses_avec_signaux += 1
 
-        # Sauvegarde du rapport
         RAPPORTS_DIR.mkdir(parents=True, exist_ok=True)
         rapport_path = RAPPORTS_DIR / f"scrutin_{numero}.txt"
-        rapport_path.write_text(
-            formater_rapport(analyse), encoding="utf-8"
-        )
+        rapport_path.write_text(formater_rapport(analyse), encoding="utf-8")
         print(f"[croisement] Rapport sauvegardé : {rapport_path}")
         print(formater_rapport(analyse))
 
-        # Publication Bluesky
         if poster:
             publier_bluesky(analyse)
 
     print(f"[croisement] Terminé — {analyses_avec_signaux} scrutin(s) avec signaux.")
 
 
+# ── Publication Bluesky ───────────────────────────────────────────────────────
+
 def publier_bluesky(analyse):
     import os
     from atproto import Client
+    from atproto_client import models as atmodels
 
     handle   = os.environ.get("BSKY_HANDLE")
     password = os.environ.get("BSKY_PASSWORD")
@@ -524,18 +513,24 @@ def publier_bluesky(analyse):
     client = Client()
     client.login(handle, password)
 
-    reply_to = None
+    root_ref  = None
+    reply_to  = None
+
     for i, texte in enumerate(posts):
+        texte = tronquer_post(texte)
         if reply_to:
             response = client.send_post(text=texte, reply_to=reply_to)
         else:
             response = client.send_post(text=texte)
-        from atproto_client import models as atmodels
+            root_ref = atmodels.create_strong_ref(response)
+
         reply_to = atmodels.AppBskyFeedPost.ReplyRef(
-            root=atmodels.create_strong_ref(response),
+            root=root_ref,
             parent=atmodels.create_strong_ref(response)
         )
         print(f"[bluesky] Post {i+1}/{len(posts)} publié.")
+        import time
+        time.sleep(1)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

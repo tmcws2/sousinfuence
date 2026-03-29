@@ -89,9 +89,10 @@ def resoudre_noms(scrutin, deputes_index):
         for v in liste:
             ref  = v["acteurRef"]
             info = deputes_index.get(ref, {})
-            v["nom_complet"]   = info.get("nom_complet", ref)
-            v["groupe"]        = info.get("groupe", "")
-            v["nom_normalise"] = normalize_name(info.get("nom_complet", ""))
+            v["nom_complet"]     = info.get("nom_complet", ref)
+            v["groupe"]          = info.get("groupe", "")
+            v["circonscription"] = info.get("circonscription", "")
+            v["nom_normalise"]   = normalize_name(info.get("nom_complet", ""))
     return scrutin
 
 
@@ -118,4 +119,4 @@ if __name__ == "__main__":
         stats_scrutin(scrutin)
         print("Exemples de votants (pour) :")
         for v in scrutin["votants"]["pour"][:5]:
-            print(f"  {v['nom_complet']} ({v['groupe']})")
+            print(f"  {v['nom_complet']} ({v['groupe']}) — {v['circonscription']}")
