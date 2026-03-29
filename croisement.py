@@ -389,11 +389,13 @@ def generer_posts(analyse):
         f"🔍 Votes Sous Influence\n\n"
         f"🗳️ Scrutin n°{scrutin['numero']} — {scrutin['date']}\n"
         f"{resultat_str} | Vote en séance publique\n\n"
-        f"📋 {titre_court}\n\n"
-        f"🔗 {lien_an}\n\n"
         f"👇 {len(resultats)} député(s) avec des intérêts déclarés potentiellement liés à ce vote."
     )
     posts.append(accroche)
+
+    # POST 2 : titre + lien (post séparé pour ne pas tronquer le lien)
+    post_lien = f"📋 {titre_court}\n\n🔗 {lien_an}"
+    posts.append(post_lien)
 
     # POST 2 : résumé GPT
     resume = resumer_texte_gpt(scrutin["titre"], themes)
